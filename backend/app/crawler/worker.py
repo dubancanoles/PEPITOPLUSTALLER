@@ -12,6 +12,7 @@ from app.analysis.classification import clasificar_documento_con_ia
 from app.analysis.identity import verificar_identidad
 from app.analysis.matching import es_contenido_relacionado
 from app.crawler.fetcher import fetch_url
+from app.metrics import medir_tiempo, registrar_metrica
 from app.models import (
     Busqueda, ClasificacionContextual, Descarte, Documento, EstadoUrl,
     Persona, ResultadoIdentidad, UrlEstado, VerificacionIdentidad,
@@ -74,7 +75,15 @@ def procesar_url(db: Session, gestor, url: str, busqueda: Busqueda, persona: Per
             gestor.encolar(enlace)
 
     # RF5: contenido relacionado
-    matching_result = es_contenido_relacionado(resultado.texto or "", persona)
+    with medir_tiempo() as t_rf5:
+        matching_result = es_contenido_relacionado(resultado.texto or "", persona)
+    
+    registrar_metrica(
+        db, busqueda_id=busqueda.id, etapa="RF5_matching",
+        num_workers=busqueda.num_workers_usado, tiempo_total_seg=t_rf5["segundos"],
+        num_items_procesados=1
+    )
+
     if not matching_result.relacionado:
         url_estado.estado = EstadoUrl.DESCARTADA
         db.add(Descarte(url_estado_id=url_estado.id, motivo=matching_result.motivo_descarte))
@@ -108,7 +117,14 @@ def procesar_url(db: Session, gestor, url: str, busqueda: Busqueda, persona: Per
     db.flush()  # asigna documento.id sin forzar un commit/fsync todavia
 
     # RF7: verificacion de identidad
-    verificacion = verificar_identidad(resultado.texto or "", persona)
+    with medir_tiempo() as t_rf7:
+        verificacion = verificar_identidad(resultado.texto or "", persona)
+    
+    registrar_metrica(
+        db, busqueda_id=busqueda.id, etapa="RF7_identidad",
+        num_workers=busqueda.num_workers_usado, tiempo_total_seg=t_rf7["segundos"],
+        num_items_procesados=1
+    )
     db.add(VerificacionIdentidad(
         documento_id=documento.id,
         resultado=verificacion.resultado,
@@ -118,7 +134,14 @@ def procesar_url(db: Session, gestor, url: str, busqueda: Busqueda, persona: Per
 
     # RF8: clasificacion contextual, solo si hay coincidencia de identidad
     if verificacion.resultado in (ResultadoIdentidad.MISMA_PERSONA, ResultadoIdentidad.POSIBLE_COINCIDENCIA):
-        clasificacion = clasificar_documento_con_ia(resultado.texto or "", persona.nombre_completo, persona.alias)
+        with medir_tiempo() as t_rf8:
+            clasificacion = clasificar_documento_con_ia(resultado.texto or "", persona.nombre_completo, persona.alias)
+        
+        registrar_metrica(
+            db, busqueda_id=busqueda.id, etapa="RF8_clasificacion",
+            num_workers=busqueda.num_workers_usado, tiempo_total_seg=t_rf8["segundos"],
+            num_items_procesados=1
+        )
         db.add(ClasificacionContextual(
             documento_id=documento.id,
             resultado=clasificacion.resultado,

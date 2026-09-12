@@ -458,8 +458,11 @@ async function cargarBusquedas() {
   tbody.innerHTML = busquedas.map(b => `
     <tr>
       <td class="url">${b.id.slice(0,8)}…</td><td>${b.pais}</td><td>${b.num_workers_usado}</td>
-      <td>${b.estado}</td><td>${new Date(b.fecha_inicio).toLocaleString()}</td>
-      <td><button class="secundario" onclick="verResultados('${b.id}')">Ver resultados</button></td>
+      <td>${b.estado}</td>      <td>${new Date(b.fecha_inicio).toLocaleString()}</td>
+      <td>
+        <button class="secundario" onclick="verResultados('${b.id}')">Ver resultados</button>
+        ${b.estado === 'EN_EJECUCION' ? `<button class="secundario" style="color:var(--negativo);border-color:var(--negativo);margin-left:4px;" onclick="cancelarBusqueda('${b.id}')">Detener</button>` : ''}
+      </td>
     </tr>
   `).join("");
 }
@@ -470,6 +473,17 @@ function verResultados(busquedaId) {
     document.getElementById("select-busqueda-resultados").value = busquedaId;
     document.getElementById("btn-cargar-resultados").click();
   }, 100);
+}
+
+async function cancelarBusqueda(id) {
+  if (!confirm("¿Seguro que deseas detener esta búsqueda?")) return;
+  try {
+    const resp = await fetch(`${API_BASE}/busquedas/${id}/cancelar`, { method: "POST" });
+    if (!resp.ok) throw new Error("Error al cancelar la búsqueda");
+    cargarBusquedas();
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 document.getElementById("form-busqueda").addEventListener("submit", async (e) => {

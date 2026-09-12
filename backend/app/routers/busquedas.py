@@ -63,6 +63,17 @@ def ejecutar_busqueda_sincrona(busqueda_id: str, num_workers: int = 4, max_pagin
     return resumen
 
 
+@router.post("/{busqueda_id}/cancelar")
+def cancelar_busqueda(busqueda_id: str, db: Session = Depends(get_db)):
+    busqueda = db.query(models.Busqueda).get(busqueda_id)
+    if not busqueda:
+        raise HTTPException(404, "Busqueda no encontrada")
+    if busqueda.estado == "EN_EJECUCION":
+        busqueda.estado = "CANCELADA"
+        db.commit()
+    return {"status": "ok", "estado": busqueda.estado}
+
+
 @router.get("/{busqueda_id}", response_model=schemas.BusquedaOut)
 def obtener_busqueda(busqueda_id: str, db: Session = Depends(get_db)):
     busqueda = db.query(models.Busqueda).get(busqueda_id)

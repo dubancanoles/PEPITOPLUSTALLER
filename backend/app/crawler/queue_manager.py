@@ -94,6 +94,11 @@ def _worker_loop(gestor: GestorColaURLs, contador, lock_contador,
                 if contador["procesadas"] >= max_paginas:
                     break
 
+            # Refrescar estado para verificar si fue cancelada
+            db.refresh(busqueda)
+            if busqueda.estado == "CANCELADA":
+                break
+
             url = gestor.obtener(timeout=0.5)
             if url is None:
                 # La cola puede quedar vacia mientras otro worker descarga
@@ -190,7 +195,8 @@ def ejecutar_busqueda(busqueda_id: str, num_workers: int, max_paginas: int = 100
     db = SessionLocal()
     try:
         busqueda = db.query(Busqueda).get(busqueda_id)
-        busqueda.estado = "FINALIZADA"
+        if busqueda.estado != "CANCELADA":
+            busqueda.estado = "FINALIZADA"
         busqueda.fecha_fin = datetime.utcnow()
         db.commit()
 
