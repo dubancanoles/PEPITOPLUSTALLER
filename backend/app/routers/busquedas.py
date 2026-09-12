@@ -82,6 +82,12 @@ def obtener_busqueda(busqueda_id: str, db: Session = Depends(get_db)):
     return busqueda
 
 
+@router.get("/{busqueda_id}/metricas")
+def obtener_metricas(busqueda_id: str, db: Session = Depends(get_db)):
+    metricas = db.query(models.MetricaEjecucion).filter(models.MetricaEjecucion.busqueda_id == busqueda_id).all()
+    return metricas
+
+
 @router.get("", response_model=List[schemas.BusquedaOut])
 def listar_busquedas(db: Session = Depends(get_db)):
     return db.query(models.Busqueda).order_by(models.Busqueda.fecha_inicio.desc()).all()

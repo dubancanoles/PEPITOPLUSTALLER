@@ -134,6 +134,7 @@
     <button data-vista="fuentes"><span class="paso-numero">2</span>Configurar fuentes</button>
     <button data-vista="busquedas"><span class="paso-numero">3</span>Iniciar búsqueda</button>
     <button data-vista="resultados"><span class="paso-numero">4</span>Revisar resultados</button>
+    <button data-vista="metricas"><span class="paso-numero">5</span>Ver Métricas</button>
   </nav>
 
   <main>
@@ -337,6 +338,26 @@
         </table></div>
       </div>
     </section>
+
+    <!-- Metricas -->
+    <section class="vista" id="vista-metricas">
+      <h1>Métricas de Ejecución</h1>
+      <p class="subtitulo">Visualiza los tiempos registrados del procesamiento concurrente.</p>
+
+      <div class="selector-persona">
+        <select id="select-busqueda-metricas"></select>
+        <button class="secundario" id="btn-cargar-metricas">Mostrar métricas</button>
+      </div>
+
+      <div class="panel">
+        <h2>Tiempos de Concurrencia (RF3, RF5, RF7, RF8)</h2>
+        <p class="ayuda">Tiempos registrados para evaluar la concurrencia según los requisitos del taller.</p>
+        <div class="tabla-contenedor"><table>
+          <thead><tr><th>Fase / Etapa</th><th>Workers Asignados</th><th>Ítems Procesados</th><th>Tiempo Total (segundos)</th></tr></thead>
+          <tbody id="tabla-metricas"><tr><td colspan="4" class="vacio">Selecciona una búsqueda y presiona "Mostrar métricas"</td></tr></tbody>
+        </table></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -353,9 +374,12 @@ document.querySelectorAll("nav button").forEach(btn => {
     document.getElementById("vista-" + btn.dataset.vista).classList.add("activa");
     if (btn.dataset.vista === "busquedas") cargarSelectPersonas();
     if (btn.dataset.vista === "resultados") {
-      cargarSelectBusquedas();
+      cargarSelectBusquedas('select-busqueda-resultados');
       clearInterval(intervaloResultados);
       intervaloResultados = setInterval(actualizarResultadosEnCurso, 5000);
+    } else if (btn.dataset.vista === "metricas") {
+      cargarSelectBusquedas('select-busqueda-metricas');
+      clearInterval(intervaloResultados);
     } else {
       clearInterval(intervaloResultados);
       intervaloResultados = null;
@@ -502,11 +526,11 @@ document.getElementById("form-busqueda").addEventListener("submit", async (e) =>
   }
 });
 
-// --- RF9: Resultados ---
-async function cargarSelectBusquedas() {
+// --- RF9: Resultados y Metricas ---
+async function cargarSelectBusquedas(selectId) {
   const resp = await fetch(`${API_BASE}/busquedas`);
   const busquedas = await resp.json();
-  const select = document.getElementById("select-busqueda-resultados");
+  const select = document.getElementById(selectId);
   const seleccionada = select.value;
   select.innerHTML = busquedas.map(b => `<option value="${b.id}">${b.id.slice(0,8)}… — ${b.pais} (${b.estado})</option>`).join("");
   if (busquedas.some(b => b.id === seleccionada)) select.value = seleccionada;
@@ -515,7 +539,7 @@ async function cargarSelectBusquedas() {
 async function actualizarResultadosEnCurso() {
   const select = document.getElementById("select-busqueda-resultados");
   if (!select.value || !document.getElementById("vista-resultados").classList.contains("activa")) return;
-  await cargarSelectBusquedas();
+  await cargarSelectBusquedas('select-busqueda-resultados');
   await cargarResultados();
 }
 
@@ -543,7 +567,7 @@ async function cargarResultados() {
 
   const [docsResp, descartadosResp] = await Promise.all([
     fetch(`${API_BASE}/resultados/${busquedaId}/documentos?${params}`),
-    fetch(`${API_BASE}/resultados/${busquedaId}/descartados`),
+    fetch(`${API_BASE}/resultados/${busquedaId}/descartados`)
   ]);
   const documentos = await docsResp.json();
   const descartados = await descartadosResp.json();
@@ -576,6 +600,25 @@ async function cargarResultados() {
 document.getElementById("btn-cargar-resultados").addEventListener("click", cargarResultados);
 document.getElementById("btn-filtrar").addEventListener("click", cargarResultados);
 document.getElementById("select-busqueda-resultados").addEventListener("change", cargarResultados);
+
+async function cargarMetricas() {
+  const busquedaId = document.getElementById("select-busqueda-metricas").value;
+  if (!busquedaId) return;
+  const metricasResp = await fetch(`${API_BASE}/busquedas/${busquedaId}/metricas`);
+  const metricas = await metricasResp.json();
+  const tbodyMetricas = document.getElementById("tabla-metricas");
+  tbodyMetricas.innerHTML = metricas.length ? metricas.map(m => `
+    <tr>
+      <td><span class="badge" style="background:rgba(255,255,255,0.1);color:var(--text);">${m.etapa}</span></td>
+      <td>${m.num_workers}</td>
+      <td>${m.num_items_procesados}</td>
+      <td style="font-family:var(--mono);color:var(--accent);">${m.tiempo_total_seg.toFixed(3)} s</td>
+    </tr>
+  `).join("") : '<tr><td colspan="4" class="vacio">Sin tiempos registrados aún</td></tr>';
+}
+
+document.getElementById("btn-cargar-metricas").addEventListener("click", cargarMetricas);
+document.getElementById("select-busqueda-metricas").addEventListener("change", cargarMetricas);
 
 // Carga inicial
 cargarPersonas();
